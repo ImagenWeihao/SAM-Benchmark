@@ -1,6 +1,6 @@
 # SAM Benchmark — MATLAB Demo
 
-**SAM** (Smart Autonomous Microscopy) is a framework for evaluating how intelligently a microscopy system can allocate its imaging resources. This benchmark tests four levels of decision-making, from naive random sampling up to LLM-guided adaptive control, so their performance can be directly compared.
+**SAM** (Smart Autonomous Microscopy) Benchmark is a testing pipeline for evaluating how intelligently a microscopy system. This benchmark tests four levels of decision-making, from naive random sampling up to LLM-guided adaptive control, so their performance can be directly compared.
 
 This repo currently implements **Levels 1 and 2** (traditional baselines). Levels 3 and 4 are in development.
 
