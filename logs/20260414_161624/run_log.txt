@@ -1,0 +1,81 @@
+[LOG]  Console mirrored to run_log.txt
+
+
++--------------------------------------------------+
+|       SAM Benchmark Demo  --  Levels 1-3        |
++--------------------------------------------------+
+
+Select benchmark level:
+  [1]  Level 1 -- Random Sampling
+  [2]  Level 2 -- Circularity-Guided (rule-based)
+  [3]  Level 3 -- ML-Guided (UNet: stardist)
+  [4]  Run ALL three and compare
+  [5]  Nucleus Normality Test (405nm DAPI, mode: stardist)
+
+Enter choice (1/2/3/4/5): 5
+
+[INFO] Loading .nd2 file...
+       C:\Users\chenw\Documents\Downloads\20251024_151823_127__WellA12_Channel405,488,561,640_Seq0011.nd2
+
+[ND2]  Opening file with Bio-Formats...
+Reading series #1
+    ....
+Reading series #2
+    ....
+Reading series #3
+    ....
+Reading series #4
+    ....
+Reading series #5
+    ....
+Reading series #6
+    ....
+Reading series #7
+    ....
+Reading series #8
+    ....
+Reading series #9
+    ....
+Reading series #10
+    ....
+Reading series #11
+    ....
+Reading series #12
+    ....
+Reading series #13
+    ....
+Reading series #14
+    ....
+Reading series #15
+    ....
+Reading series #16
+    ....
+[ND2]  Dimensions: W=1952  H=1952  C=4  Z=1  T=1
+[ND2]  Pixel size: 0.3305 x 0.3305 um
+[ND2]  File loaded successfully.
+
+{Error: <a href="matlab: opentoline('D:\Matlab Files\Codes\SAM\run_nucleus_normality_test.m',429,12)">File: run_nucleus_normality_test.m Line: 429 Column: 12</a>
+Character vector is not terminated properly.
+
+Error in <a href="matlab:matlab.internal.language.introspective.errorDocCallback('run_benchmark', 'D:\Matlab Files\Codes\SAM\run_benchmark.m', 167)" style="font-weight:bold">run_benchmark</a> (<a href="matlab: opentoline('D:\Matlab Files\Codes\SAM\run_benchmark.m',167,0)">line 167</a>)
+        norm_results = run_nucleus_normality_test(img_data, params);
+} 
+fid  = fopen('D:\Matlab Files\Codes\SAM\run_nucleus_normality_test.m', 'r');
+code = fread(fid, '*char')';
+fclose(fid);
+
+% Fix the unterminated string - replace with explicit two-line title
+code_fixed = strrep(code, ...
+    'title(ax2, ''Segmentation\nColoured by class'', ''FontSize'', 10);', ...
+    'title(ax2, {''Segmentation'', ''Coloured by class''}, ''FontSize'', 10);');
+
+fid = fopen('D:\Matlab Files\Codes\SAM\run_nucleus_normality_test.m', 'w');
+fwrite(fid, code_fixed);
+fclose(fid);
+fprintf('Patched: title fix applied.\n');
+Patched: title fix applied.
+clear functions
+rehash toolboxcache
+run_benchmark   % → choose [5]
+[INFO] Bio-Formats ready.
+[LOG]  Run folder: D:\Matlab Files\Codes\SAM\logs\20260414_161653

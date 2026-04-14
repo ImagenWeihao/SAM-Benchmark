@@ -1,0 +1,160 @@
+[LOG]  Console output mirrored to: run_log.txt
+
+
++----------------------------------------------+
+|       SAM Benchmark Demo  --  Level 1 & 2   |
++----------------------------------------------+
+
+Select benchmark level:
+  [1]  Level 1 -- Random Sampling Baseline
+  [2]  Level 2 -- Circularity-Guided Selection
+  [3]  Run BOTH and compare side-by-side
+
+Enter choice (1/2/3): 3
+
+[INFO] Loading .nd2 file...
+       C:\Users\chenw\Documents\Downloads\20251024_151823_127__WellA12_Channel405,488,561,640_Seq0011.nd2
+
+[ND2]  Opening file with Bio-Formats...
+Reading series #1
+    ....
+Reading series #2
+    ....
+Reading series #3
+    ....
+Reading series #4
+    ....
+Reading series #5
+    ....
+Reading series #6
+    ....
+Reading series #7
+    ....
+Reading series #8
+    ....
+Reading series #9
+    ....
+Reading series #10
+    ....
+Reading series #11
+    ....
+Reading series #12
+    ....
+Reading series #13
+    ....
+Reading series #14
+    ....
+Reading series #15
+    ....
+Reading series #16
+    ....
+[ND2]  Dimensions: W=1952  H=1952  C=4  Z=1  T=1
+[ND2]  Pixel size: 0.3305 x 0.3305 um
+[ND2]  File loaded successfully.
+
+[LOG]  Raw nucleus image saved.
+
+══════════════════════════════════════════════
+  LEVEL 1 — Random Sampling Baseline
+══════════════════════════════════════════════
+
+[L1] Step 1/5 — Coarse scan: detecting nuclei in full FOV
+[SEG]  Segmenting nuclei...
+[SEG]  Detected 12 nuclei.
+[SEG]  Circularity range: [0.777 – 1.000]  mean=0.922
+[L1] Total nuclei detected: 12
+
+[L1] Step 2/5 — Random subsample to 100 scan candidates
+[L1] Scan pool size: 12 cells
+
+[L1] Step 3/5 — Random selection of 10 cells for Z-stack
+[L1] Selected cells (random): 11 2 3 4 12 9 1 7 8 10 
+
+[L1] Step 4/5 — Z-stack acquisition on 10 target cells
+[ZSTK] Acquiring Z-stacks for 10 target cells (7 Z-planes each)...
+[ZSTK] Z-stack acquisition complete.
+
+[L1] Step 5/5 — Morphology characterisation
+[MORPH] Characterising morphology for 10 cells...
+[MORPH] Characterisation complete.
+
+CellID  Area(px²)   Circularity   AspectRatio    Solidity       FocusQual
+----------------------------------------------------------------------
+11      1720        0.946         2.702          1.000          0.0005   
+2       2100        0.865         3.377          0.464          0.0006   
+3       3772        0.992         3.930          0.459          0.0006   
+4       361         0.988         2.000          1.000          0.0005   
+12      3925        0.937         3.650          0.562          0.0006   
+9       282         0.777         1.537          0.667          0.0005   
+1       2455        0.998         3.807          0.680          0.0005   
+7       4340        0.850         2.510          0.463          0.0006   
+8       1925        0.923         2.247          0.522          0.0005   
+10      2744        0.845         2.425          0.329          0.0005   
+
+
+[L1] ── Summary ─────────────────────────────
+[L1]   Detected:  12 nuclei
+[L1]   Scanned:   12 (random)
+[L1]   Targeted:  10 (random)
+[L1]   Mean circularity (all):      0.922
+[L1]   Mean circularity (selected): 0.912 ± 0.075
+[L1]   Elapsed: 0.66 s
+[L1] ────────────────────────────────────────
+
+══════════════════════════════════════════════
+  LEVEL 2 — Circularity-Guided Selection
+  Threshold: circularity >= 0.85
+══════════════════════════════════════════════
+
+[L2] Step 1/5 — Coarse scan: detecting nuclei in full FOV
+[SEG]  Segmenting nuclei...
+[SEG]  Detected 12 nuclei.
+[SEG]  Circularity range: [0.777 – 1.000]  mean=0.922
+[L2] Total nuclei detected: 12
+
+[L2] Step 2/5 — Random subsample to 100 scan candidates
+[L2] Scan pool: 12 cells
+
+[L2] Step 3/5 — Applying circularity rule (threshold = 0.85)
+[L2] Cells passing circularity threshold: 9 / 12
+[L2] Selection mode: threshold + top-N
+[L2] Selected cells (IDs): 6 1 3 4 11 5 12 8 2 
+[L2] Selected circularity values: 1.000 0.998 0.992 0.988 0.946 0.944 0.937 0.923 0.865 
+
+[L2] Step 4/5 — Z-stack acquisition on 9 target cells
+[ZSTK] Acquiring Z-stacks for 9 target cells (7 Z-planes each)...
+[ZSTK] Z-stack acquisition complete.
+
+[L2] Step 5/5 — Morphology characterisation
+[MORPH] Characterising morphology for 9 cells...
+[MORPH] Characterisation complete.
+
+CellID  Area(px²)   Circularity   AspectRatio    Solidity       FocusQual
+----------------------------------------------------------------------
+6       632         1.000         1.150          0.667          0.0005   
+1       2455        0.998         3.807          0.680          0.0006   
+3       3772        0.992         3.930          0.459          0.0006   
+4       361         0.988         2.000          1.000          0.0005   
+11      1720        0.946         2.702          1.000          0.0005   
+5       2336        0.944         3.190          0.561          0.0005   
+12      3925        0.937         3.650          0.562          0.0006   
+8       1925        0.923         2.247          0.522          0.0005   
+2       2100        0.865         3.377          0.464          0.0005   
+
+
+[L2] ── Summary ─────────────────────────────
+[L2]   Detected:  12 nuclei
+[L2]   Scanned:   12 (subsample)
+[L2]   Passed threshold (≥0.85): 9 (75.0%)
+[L2]   Targeted:  9
+[L2]   Mean circularity (all):      0.922
+[L2]   Mean circularity (selected): 0.955 ± 0.045
+[L2]   Elapsed: 0.59 s
+[L2] ────────────────────────────────────────
+[LOG]  Figure saved: D:\Matlab Files\Codes\SAM\logs\20260410_131059\Level1_20260410_131059.png
+[LOG]  Figure saved: D:\Matlab Files\Codes\SAM\logs\20260410_131059\Level2_20260410_131059.png
+{Unrecognized function or variable 'compare_levels'.
+
+Error in <a href="matlab:matlab.internal.language.introspective.errorDocCallback('run_benchmark', 'D:\Matlab Files\Codes\SAM\run_benchmark.m', 117)" style="font-weight:bold">run_benchmark</a> (<a href="matlab: opentoline('D:\Matlab Files\Codes\SAM\run_benchmark.m',117,0)">line 117</a>)
+        compare_levels(results_L1, results_L2, params);
+} 

@@ -1,0 +1,405 @@
+[LOG]  Console mirrored to run_log.txt
+
+
++--------------------------------------------------+
+|       SAM Benchmark Demo  --  Levels 1-3        |
++--------------------------------------------------+
+
+Select benchmark level:
+  [1]  Level 1 -- Random Sampling
+  [2]  Level 2 -- Circularity-Guided (rule-based)
+  [3]  Level 3 -- ML-Guided (UNet: stardist)
+  [4]  Run ALL three and compare
+  [5]  Nucleus Normality Test (405nm DAPI, mode: stardist)
+
+Enter choice (1/2/3/4/5): 5
+
+[INFO] Loading .nd2 file...
+       C:\Users\chenw\Documents\Downloads\20251024_151823_127__WellA12_Channel405,488,561,640_Seq0011.nd2
+
+[ND2]  Opening file with Bio-Formats...
+Reading series #1
+    ....
+Reading series #2
+    ....
+Reading series #3
+    ....
+Reading series #4
+    ....
+Reading series #5
+    ....
+Reading series #6
+    ....
+Reading series #7
+    ....
+Reading series #8
+    ....
+Reading series #9
+    ....
+Reading series #10
+    ....
+Reading series #11
+    ....
+Reading series #12
+    ....
+Reading series #13
+    ....
+Reading series #14
+    ....
+Reading series #15
+    ....
+Reading series #16
+    ....
+[ND2]  Dimensions: W=1952  H=1952  C=4  Z=1  T=1
+[ND2]  Pixel size: 0.3305 x 0.3305 um
+[ND2]  File loaded successfully.
+
+
+==============================================
+  NUCLEUS NORMALITY CLASSIFICATION TEST
+  Mode:    stardist
+  Channel: 405nm (DAPI)
+==============================================
+
+[NNT] Step 1/4 — Segmenting nuclei from 405nm channel...
+[SEG]  Segmenting nuclei...
+[SEG]  Detected 12 nuclei.
+[SEG]  Circularity range: [0.777 – 1.000]  mean=0.922
+[SEG]  Micronuclei pass: found 3 additional small objects
+[NNT] Detected 15 nucleus objects
+[NNT] Step 2/4 — Extracting nucleus crops (64x64 px)...
+[NNT] Crops extracted: 64x64x1x15
+[NNT] Step 3/4 — Classifying nuclei (mode: stardist)...
+[UNET] Model: stardist  |  Target: "normal_nucleus"
+[UNET] Classifying 15 cells...
+{Unrecognized method, property, or field 'from_pretrained' for class 'py.abc.ABCMeta'.
+
+Error in <a href="matlab:matlab.internal.language.introspective.errorDocCallback('classify_cells_unet>unet_stardist', 'D:\Matlab Files\Codes\SAM\classify_cells_unet.m', 165)" style="font-weight:bold">classify_cells_unet>unet_stardist</a> (<a href="matlab: opentoline('D:\Matlab Files\Codes\SAM\classify_cells_unet.m',165,0)">line 165</a>)
+model     = sd_module.StarDist2D.from_pretrained(model_info.version);
+
+Error in <a href="matlab:matlab.internal.language.introspective.errorDocCallback('classify_cells_unet', 'D:\Matlab Files\Codes\SAM\classify_cells_unet.m', 35)" style="font-weight:bold">classify_cells_unet</a> (<a href="matlab: opentoline('D:\Matlab Files\Codes\SAM\classify_cells_unet.m',35,0)">line 35</a>)
+        [cells_out, model_info] = unet_stardist(cells_in, img_data, params);
+
+Error in <a href="matlab:matlab.internal.language.introspective.errorDocCallback('run_nucleus_normality_test', 'D:\Matlab Files\Codes\SAM\run_nucleus_normality_test.m', 90)" style="font-weight:bold">run_nucleus_normality_test</a> (<a href="matlab: opentoline('D:\Matlab Files\Codes\SAM\run_nucleus_normality_test.m',90,0)">line 90</a>)
+        [classified, ~] = classify_cells_unet(all_cells, img_data, unet_params);
+
+Error in <a href="matlab:matlab.internal.language.introspective.errorDocCallback('run_benchmark', 'D:\Matlab Files\Codes\SAM\run_benchmark.m', 167)" style="font-weight:bold">run_benchmark</a> (<a href="matlab: opentoline('D:\Matlab Files\Codes\SAM\run_benchmark.m',167,0)">line 167</a>)
+        norm_results = run_nucleus_normality_test(img_data, params);
+} 
+type('D:\Matlab Files\Codes\SAM\classify_cells_unet.m')
+
+function [cells_out, model_info] = classify_cells_unet(cells_in, img_data, params)
+%CLASSIFY_CELLS_UNET  Dispatch cell crops to the selected UNet classifier.
+%
+%  [cells_out, model_info] = classify_cells_unet(cells_in, img_data, params)
+%
+%  Adds a .unet_score field (0-1 confidence) and .unet_class field to each
+%  cell in cells_in. Dispatches to the appropriate model adapter based on
+%  params.unet_model:
+%
+%    'stardist'    — StarDist 2D_versatile_fluo (best for DAPI nuclei, recommended)
+%                    pip install stardist tensorflow
+%    'cellpose'    — Cellpose 2.0 nuclei model
+%                    pip install cellpose
+%    'nuclear_seg' — nuclearSegmentator (directly classifies normal/abnormal)
+%                    pip install nuclear-segmentator
+%    'matlab'      — MATLAB Deep Learning Toolbox UNet (pure MATLAB, needs training)
+%    'mock'        — Rule-based proxy using circularity+area (no install needed)
+%
+%  params fields used:
+%    .unet_model      — model selection string (see above)
+%    .unet_target     — target morphology class description (string)
+%    .unet_model_path — path to saved model weights (for 'matlab' mode)
+%    .nucleus_channel — channel index for nucleus image
+
+fprintf('[UNET] Model: %s  |  Target: "%s"\n', params.unet_model, params.unet_target);
+fprintf('[UNET] Classifying %d cells...\n', numel(cells_in));
+
+t0 = tic;
+
+switch lower(params.unet_model)
+    case 'cellpose'
+        [cells_out, model_info] = unet_cellpose(cells_in, img_data, params);
+
+    case 'stardist'
+        [cells_out, model_info] = unet_stardist(cells_in, img_data, params);
+
+    case 'nuclear_seg'
+        [cells_out, model_info] = unet_nuclear_seg(cells_in, img_data, params);
+
+    case 'matlab'
+        [cells_out, model_info] = unet_matlab(cells_in, img_data, params);
+
+    case 'mock'
+        [cells_out, model_info] = unet_mock(cells_in, img_data, params);
+
+    otherwise
+        error('UNET:unknownModel', ...
+              ['Unknown model: "%s"\n' ...
+               'Valid options:\n' ...
+               '  ''stardist''    — pip install stardist tensorflow\n' ...
+               '  ''cellpose''    — pip install cellpose\n' ...
+               '  ''nuclear_seg'' — pip install nuclear-segmentator\n' ...
+               '  ''matlab''      — Deep Learning Toolbox + trained .mat\n' ...
+               '  ''mock''        — no install needed (rule-based proxy)\n'], ...
+              params.unet_model);
+end
+
+elapsed = toc(t0);
+scores  = [cells_out.unet_score];
+
+fprintf('[UNET] Classification complete in %.2f s\n', elapsed);
+fprintf('[UNET] Score distribution: min=%.3f  max=%.3f  mean=%.3f  std=%.3f\n', ...
+        min(scores), max(scores), mean(scores), std(scores));
+end
+
+
+%% ======================================================================
+%  MODEL ADAPTERS — one function per model
+%  Each adapter must return cells with .unet_score and .unet_class fields
+%% ======================================================================
+
+function [cells_out, model_info] = unet_cellpose(cells_in, img_data, params)
+%UNET_CELLPOSE  Cellpose 2.0 adapter via MATLAB-Python bridge.
+%
+%  Requires:
+%    - Python 3.8-3.10 with cellpose installed:  pip install cellpose
+%    - MATLAB configured Python environment:
+%        pyenv('Version', 'C:\path\to\python.exe')
+%
+%  Cellpose returns per-cell masks and flow fields. We use the average
+%  flow magnitude inside each nucleus ROI as a proxy confidence score:
+%  high flow coherence → well-defined cell boundary → high confidence.
+
+model_info.name    = 'Cellpose 2.0';
+model_info.version = 'cyto2';   % pretrained model: 'cyto2' | 'nuclei' | 'cyto3'
+model_info.target  = params.unet_target;
+
+cells_out = cells_in;
+
+% Check Python is available
+try
+    py.importlib.import_module('cellpose');
+catch
+    error('UNET:cellposeNotFound', ...
+          ['Cellpose Python package not found.\n' ...
+           'Install with: pip install cellpose\n' ...
+           'Then configure MATLAB Python env:\n' ...
+           '  pyenv(''Version'', ''C:\\path\\to\\python.exe'')']);
+end
+
+% Load Cellpose model
+cp_models = py.importlib.import_module('cellpose.models');
+model     = cp_models.Cellpose(pyargs('model_type', model_info.version, 'gpu', false));
+
+nucleus_img = img_data.nucleus;   % [0,1] normalised double
+[H, W]      = size(nucleus_img);
+crop_half   = 64;
+
+for k = 1:numel(cells_in)
+    cx = round(cells_in(k).centroid(1));
+    cy = round(cells_in(k).centroid(2));
+    x1 = max(1, cx-crop_half); x2 = min(W, cx+crop_half);
+    y1 = max(1, cy-crop_half); y2 = min(H, cy+crop_half);
+    crop = nucleus_img(y1:y2, x1:x2);
+
+    % Convert to uint8 for Cellpose
+    crop_u8  = uint8(crop * 255);
+    py_img   = py.numpy.array(crop_u8);
+    py_imgs  = py.list({py_img});
+
+    % Run Cellpose
+    result   = model.eval(py_imgs, pyargs('diameter', py.None, 'channels', py.list({py.int(0), py.int(0)})));
+    masks    = result{1};   % cell array of mask arrays
+    flows    = result{2};   % flow fields
+
+    % Confidence proxy: fraction of crop covered by a detected mask
+    mask_mat = double(masks{1});
+    coverage = sum(mask_mat(:) > 0) / numel(mask_mat);
+    cells_out(k).unet_score = min(1.0, coverage * 2);  % scale to ~0-1
+    cells_out(k).unet_class = params.unet_target;
+end
+
+model_info.status = 'ok';
+end
+
+
+function [cells_out, model_info] = unet_stardist(cells_in, img_data, params)
+%UNET_STARDIST  StarDist adapter via MATLAB-Python bridge.
+%
+%  Requires:
+%    - Python with stardist installed:  pip install stardist
+%    - Pretrained model: '2D_versatile_fluo' (fluorescence nuclei)
+%
+%  StarDist returns per-object probability scores directly — these are used
+%  as the confidence score with no further scaling needed.
+
+model_info.name    = 'StarDist';
+model_info.version = '2D_versatile_fluo';
+model_info.target  = params.unet_target;
+
+cells_out = cells_in;
+
+try
+    py.importlib.import_module('stardist');
+catch
+    error('UNET:stardistNotFound', ...
+          ['StarDist Python package not found.\n' ...
+           'Install with: pip install stardist tensorflow\n' ...
+           'Then configure MATLAB Python env:\n' ...
+           '  pyenv(''Version'', ''C:\\path\\to\\python.exe'')']);
+end
+
+sd_module = py.importlib.import_module('stardist.models');
+np        = py.importlib.import_module('numpy');
+model     = sd_module.StarDist2D.from_pretrained(model_info.version);
+
+nucleus_img = img_data.nucleus;
+[H, W]      = size(nucleus_img);
+crop_half   = 64;
+
+for k = 1:numel(cells_in)
+    cx = round(cells_in(k).centroid(1));
+    cy = round(cells_in(k).centroid(2));
+    x1 = max(1, cx-crop_half); x2 = min(W, cx+crop_half);
+    y1 = max(1, cy-crop_half); y2 = min(H, cy+crop_half);
+    crop    = nucleus_img(y1:y2, x1:x2);
+    py_crop = np.expand_dims(py.numpy.array(crop), int32(2));  % add channel dim
+
+    result  = model.predict_instances(py_crop);
+    details = result{2};
+
+    % Use mean probability of detected instances as confidence score
+    probs = double(py.numpy.array(details{'prob'}));
+    if ~isempty(probs)
+        cells_out(k).unet_score = mean(probs);
+    else
+        cells_out(k).unet_score = 0.0;
+    end
+    cells_out(k).unet_class = params.unet_target;
+end
+
+model_info.status = 'ok';
+end
+
+
+function [cells_out, model_info] = unet_matlab(cells_in, img_data, params)
+%UNET_MATLAB  MATLAB Deep Learning Toolbox UNet adapter.
+%
+%  Requires:
+%    - Deep Learning Toolbox
+%    - A trained .mat file containing a 'net' variable (DAGNetwork or dlnetwork)
+%      Set params.unet_model_path to its location.
+%
+%  If no model file is provided, a minimal UNet is created and used as a
+%  skeleton (untrained — scores will be random, useful for testing structure).
+%
+%  For training your own model, see:
+%    https://www.mathworks.com/help/vision/ug/semantic-segmentation-using-deep-learning.html
+
+model_info.name   = 'MATLAB UNet';
+model_info.target = params.unet_target;
+cells_out         = cells_in;
+
+if isfield(params, 'unet_model_path') && isfile(params.unet_model_path)
+    fprintf('[UNET] Loading model from: %s\n', params.unet_model_path);
+    loaded = load(params.unet_model_path, 'net');
+    net    = loaded.net;
+    model_info.version = 'custom trained';
+else
+    warning('[UNET] No model file found at params.unet_model_path. Using untrained skeleton.');
+    % Build a minimal 2-class UNet skeleton (128x128 input)
+    input_size = [128 128 1];
+    n_classes  = 2;
+    net        = unetLayers(input_size, n_classes, 'EncoderDepth', 2);
+    model_info.version = 'untrained skeleton';
+end
+
+nucleus_img = img_data.nucleus;
+[H, W]      = size(nucleus_img);
+crop_size   = 128;
+half        = crop_size / 2;
+
+for k = 1:numel(cells_in)
+    cx = round(cells_in(k).centroid(1));
+    cy = round(cells_in(k).centroid(2));
+    x1 = max(1, cx-half); x2 = min(W, cx+half);
+    y1 = max(1, cy-half); y2 = min(H, cy+half);
+    crop = nucleus_img(y1:y2, x1:x2);
+
+    % Pad to exact crop_size x crop_size if at image edge
+    crop_padded = zeros(crop_size, crop_size);
+    crop_padded(1:size(crop,1), 1:size(crop,2)) = crop;
+
+    % Run segmentation
+    try
+        seg_map = semanticseg(single(crop_padded), net);
+        % Confidence = fraction of pixels classified as target class (class 2)
+        target_px = sum(seg_map(:) == 'target') / numel(seg_map);
+        cells_out(k).unet_score = double(target_px);
+    catch
+        cells_out(k).unet_score = rand();  % fallback for untrained skeleton
+    end
+    cells_out(k).unet_class = params.unet_target;
+end
+
+model_info.status = 'ok';
+end
+
+
+function [cells_out, model_info] = unet_mock(cells_in, img_data, params)
+%UNET_MOCK  Deterministic mock classifier for testing without any ML model.
+%
+%  Scores cells using a combination of real morphology features (circularity,
+%  intensity, area normalised to population) to produce a plausible
+%  confidence score. No model needed — useful for pipeline testing and
+%  for demonstrating that score-based selection outperforms random.
+%
+%  Score formula:
+%    score = w_circ * circularity
+%          + w_int  * normalised_intensity
+%          + w_area * normalised_area (penalises outlier sizes)
+%          + small Gaussian noise
+
+model_info.name    = 'Mock (morphology proxy)';
+model_info.version = 'deterministic';
+model_info.target  = params.unet_target;
+
+cells_out = cells_in;
+n         = numel(cells_in);
+
+% Normalise area to [0,1] within this scan pool
+areas     = [cells_in.area];
+area_norm = (areas - min(areas)) / (max(areas) - min(areas) + eps);
+% Penalise very small and very large cells — prefer mid-range
+area_score = 1 - abs(area_norm - 0.5) * 2;
+
+% Normalise intensity
+intens      = [cells_in.mean_int];
+intens_norm = (intens - min(intens)) / (max(intens) - min(intens) + eps);
+
+% Weights (sum to 1)
+w_circ = 0.50;
+w_int  = 0.30;
+w_area = 0.20;
+
+rng(42);  % fixed seed for reproducibility
+noise = 0.03 * randn(1, n);
+
+for k = 1:n
+    score = w_circ * cells_in(k).circularity ...
+          + w_int  * intens_norm(k) ...
+          + w_area * area_score(k) ...
+          + noise(k);
+    cells_out(k).unet_score = max(0, min(1, score));
+    cells_out(k).unet_class = params.unet_target;
+end
+
+model_info.status = 'ok (mock)';
+fprintf('[UNET] Mock scores based on circularity + intensity + area.\n');
+end
+clear functions
+rehash toolboxcache
+run_benchmark   % → choose [5]
+[INFO] Bio-Formats ready.
+[LOG]  Run folder: D:\Matlab Files\Codes\SAM\logs\20260414_161516

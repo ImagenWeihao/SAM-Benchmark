@@ -1,0 +1,132 @@
+[LOG]  Console mirrored to run_log.txt
+
+
++--------------------------------------------------+
+|       SAM Benchmark Demo  --  Levels 1-3        |
++--------------------------------------------------+
+
+Select benchmark level:
+  [1]  Level 1 -- Random Sampling
+  [2]  Level 2 -- Circularity-Guided (rule-based)
+  [3]  Level 3 -- ML-Guided (UNet: stardist)
+  [4]  Run ALL three and compare
+  [5]  Nucleus Normality Test (405nm DAPI, mode: stardist)
+
+Enter choice (1/2/3/4/5): 5
+
+[INFO] Loading .nd2 file...
+       C:\Users\chenw\Documents\Downloads\20251024_151823_127__WellA12_Channel405,488,561,640_Seq0011.nd2
+
+[ND2]  Opening file with Bio-Formats...
+Reading series #1
+    ....
+Reading series #2
+    ....
+Reading series #3
+    ....
+Reading series #4
+    ....
+Reading series #5
+    ....
+Reading series #6
+    ....
+Reading series #7
+    ....
+Reading series #8
+    ....
+Reading series #9
+    ....
+Reading series #10
+    ....
+Reading series #11
+    ....
+Reading series #12
+    ....
+Reading series #13
+    ....
+Reading series #14
+    ....
+Reading series #15
+    ....
+Reading series #16
+    ....
+[ND2]  Dimensions: W=1952  H=1952  C=4  Z=1  T=1
+[ND2]  Pixel size: 0.3305 x 0.3305 um
+[ND2]  File loaded successfully.
+
+
+==============================================
+  NUCLEUS NORMALITY CLASSIFICATION TEST
+  Mode:    stardist
+  Channel: 405nm (DAPI)
+==============================================
+
+[NNT] Step 1/4 — Segmenting nuclei from 405nm channel...
+[SEG]  Segmenting nuclei...
+[SEG]  Detected 12 nuclei.
+[SEG]  Circularity range: [0.777 – 1.000]  mean=0.922
+[SEG]  Micronuclei pass: found 3 additional small objects
+[NNT] Detected 15 nucleus objects
+[NNT] Step 2/4 — Extracting nucleus crops (64x64 px)...
+[NNT] Crops extracted: 64x64x1x15
+[NNT] Step 3/4 — Classifying nuclei (mode: stardist)...
+[UNET] Model: stardist  |  Target: "normal_nucleus"
+[UNET] Classifying 15 cells...
+[StarDist] Loading bridge from: D:\Matlab Files\Codes\SAM\stardist_bridge.py
+[StarDist] Loading pretrained model: 2D_versatile_fluo
+Found model '2D_versatile_fluo' for 'StarDist2D'.
+Loading network weights from 'weights_best.h5'.
+Loading thresholds from 'thresholds.json'.
+Using default values: prob_thresh=0.479071, nms_thresh=0.3.
+[StarDist] Running inference on 15 cells...
+[StarDist] Cell  1: prob=0.879  shape_var=0.260  n_obj=1  -> abnormal_shape   (score=0.421)
+[StarDist] Cell  2: prob=0.862  shape_var=0.237  n_obj=1  -> normal           (score=0.472)
+[StarDist] Cell  3: prob=0.906  shape_var=0.345  n_obj=1  -> abnormal_shape   (score=0.218)
+[StarDist] Cell  4: prob=0.826  shape_var=0.086  n_obj=1  -> normal           (score=0.603)
+[StarDist] Cell  5: prob=0.862  shape_var=0.231  n_obj=1  -> normal           (score=0.466)
+[StarDist] Cell  6: prob=0.864  shape_var=0.127  n_obj=1  -> normal           (score=0.586)
+[StarDist] Cell  7: prob=0.892  shape_var=0.311  n_obj=2  -> abnormal_count   (score=0.210)
+[StarDist] Cell  8: prob=0.818  shape_var=0.214  n_obj=1  -> normal           (score=0.495)
+[StarDist] Cell  9: prob=0.772  shape_var=0.053  n_obj=1  -> normal           (score=0.604)
+[StarDist] Cell 10: prob=0.776  shape_var=0.257  n_obj=1  -> abnormal_shape   (score=0.358)
+[StarDist] Cell 11: prob=0.821  shape_var=0.176  n_obj=1  -> normal           (score=0.556)
+[StarDist] Cell 12: prob=0.870  shape_var=0.334  n_obj=1  -> abnormal_shape   (score=0.198)
+[StarDist] Cell 13: prob=0.681  shape_var=0.056  n_obj=1  -> normal           (score=0.521)
+[StarDist] Cell 14: prob=0.000  shape_var=0.000  n_obj=0  -> normal           (score=0.000)
+[StarDist] Cell 15: prob=0.000  shape_var=0.000  n_obj=0  -> normal           (score=0.000)
+[UNET] Done in 1.60 s | min=0.000  max=0.604  mean=0.381
+
+[NNT] Step 4/4 — Compiling results...
+
+CellID  Class             Confid.   Circ.     Reason
+------------------------------------------------------------------------
+**1     abnormal_shape    0.421     0.998     stardist: score=0.421
+  2     normal            0.472     0.865     stardist: score=0.472
+**3     abnormal_shape    0.218     0.992     stardist: score=0.218
+  4     normal            0.603     0.988     stardist: score=0.603
+  5     normal            0.466     0.944     stardist: score=0.466
+  6     normal            0.586     1.000     stardist: score=0.586
+**7     abnormal_count    0.210     0.850     stardist: score=0.210
+  8     normal            0.495     0.923     stardist: score=0.495
+  9     normal            0.604     0.777     stardist: score=0.604
+**10    abnormal_shape    0.358     0.845     stardist: score=0.358
+  11    normal            0.556     0.946     stardist: score=0.556
+**12    abnormal_shape    0.198     0.937     stardist: score=0.198
+  13    normal            0.521     0.967     stardist: score=0.521
+  14    normal            0.000     1.000     stardist: score=0.000
+  15    normal            0.000     1.000     stardist: score=0.000
+
+[NNT] -- Classification Summary ------------------
+[NNT]   Total nuclei:     15
+[NNT]   Normal:           10 (66.7%)
+[NNT]   Abnormal shape:   4 (26.7%)
+[NNT]   Abnormal count:   1 (6.7%)
+[NNT]   Total abnormal:   5 (33.3%)
+[NNT] -------------------------------------------------
+
+[LOG]  Normality figure saved.
+[LOG]  Saved: results_normality.mat
+[LOG]  Saved: normality_classification.csv
+
+[DONE] Normality test complete.
+[LOG]  Outputs saved to: D:\Matlab Files\Codes\SAM\logs\20260414_161952
