@@ -1,6 +1,10 @@
 # SAM Benchmark — MATLAB Demo
 
+<<<<<<< HEAD
 **SAM** (Sequential Adaptive Microscopy) is a framework for evaluating how intelligently a microscopy system can allocate its imaging resources. This benchmark tests four levels of decision-making — from naive random sampling up to LLM-guided adaptive control — so their performance can be directly compared.
+=======
+**SAM** (Smart Autonomous Microscopy) Benchmark is a testing pipeline for evaluating how intelligently a microscopy system. This benchmark tests four levels of decision-making, from naive random sampling up to LLM-guided adaptive control, so their performance can be directly compared.
+>>>>>>> 43170c55d42b2b0336de4a69e4cafde667e826c3
 
 This repo currently implements **Levels 1, 2, and 3**, plus a standalone **Nucleus Normality Test** using StarDist. Level 4 (LLM-adaptive SAM) is in development.
 
