@@ -100,14 +100,15 @@ for k = 1:n
         end
 
         % Extract coord shape variance (irregularity proxy)
-        % coord shape: [n_obj x 2 x n_rays] — use first object
         coords_py = result{'coords'};
         shape_var = 0;
         if double(py.len(coords_py)) > 0
             try
-                % Get radii for first (best) object
-                coord_arr = double(py.array.array('d', ...
-                    py.numpy.array(coords_py).flatten().tolist()));
+                coord_np  = py.numpy.array(coords_py);
+                coord_u16 = feval(py.getattr(coord_np, 'astype'), 'float32');
+                flat_arr  = feval(py.getattr(coord_u16, 'flatten'));
+                coord_list= feval(py.getattr(flat_arr,  'tolist'));
+                coord_arr = double(py.array.array('f', coord_list));
                 if numel(coord_arr) > 2
                     shape_var = std(coord_arr) / (mean(coord_arr) + eps);
                 end

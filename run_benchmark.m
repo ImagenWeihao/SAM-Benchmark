@@ -13,7 +13,7 @@
 % Author: SAM Project
 % Date:   2026
 
-clear; clc; close all;
+clear variables; clc; close all;
 
 %% ── Bio-Formats Path Setup ───────────────────────────────────────────────
 bf_path = 'D:\Matlab Files\toolbox\bfmatlab';
@@ -40,7 +40,7 @@ end
 fprintf('[INFO] Bio-Formats ready.\n');
 
 %% ── User Parameters ──────────────────────────────────────────────────────
-params.nd2_path        = 'C:\Users\chenw\Documents\Downloads\20251024_151823_127__WellA12_Channel405,488,561,640_Seq0011.nd2';
+params.nd2_path        = 'D:\Matlab Files\Codes\SAM_Data\AnnotationData\20260413_105534_226__WellA05_Channel488,405,561,532_1_Seq0000_crop(first5FOV).nd2';
 
 % Shared params
 params.n_scan_cells    = 100;
@@ -80,7 +80,7 @@ params.circularity_threshold = 0.85;
 %   'matlab'      Pure MATLAB. Needs Deep Learning Toolbox + trained .mat file.
 %                 Set params.unet_model_path below.
 
-params.unet_model      = 'stardist';
+params.unet_model      = 'mock';
 params.unet_target     = 'round_nucleus';
 params.unet_threshold  = 0.75;
 params.unet_model_path = '';
@@ -91,14 +91,20 @@ params.unet_model_path = '';
 
 % ── Nucleus Normality Test params ─────────────────────────────────────────
 % Mode: 'mock' (no model) | 'stardist' | 'cellpose' | 'nuclear_seg'
-params.normality_mode            = 'stardist';
+params.normality_mode            = 'mock';
 params.normality_circ_threshold  = 0.80;
 params.normality_solid_threshold = 0.85;
 params.normality_area_ratio_hi   = 2.5;
 params.normality_area_ratio_lo   = 0.30;
 params.normality_model_path      = '';
 
-%% ── Logging Setup ────────────────────────────────────────────────────────
+% ── Ground Truth Validation params (Option 6) ─────────────────────────────
+params.gt_mask_path = 'D:\Matlab Files\Codes\SAM_Data\AnnotationData\Mask\20260413_105534_226__WellA05_Channel488,405,561,532_1_Seq0000_masks_FOV1.tif';
+params.gt_csv_path  = 'D:\Matlab Files\Codes\SAM_Data\AnnotationData\Meta_data\20260413_105534_226__WellA05_Channel488,405,561,532_1_Seq0000_annotations_FOV1.csv';
+params.gt_nd2_path  = 'D:\Matlab Files\Codes\SAM_Data\AnnotationData\20260413_105534_226__WellA05_Channel488,405,561,532_1_Seq0000_crop(first5FOV).nd2';
+params.gt_series    = 5;   % Series 5 = FOV1 confirmed by GT centroid overlay
+params.gt_z_plane   = 1;   % 1 Z plane per series in this file
+params.gt_nucleus_channel = 2;   % 405nm = plane 2 (channel order: 488,405,561,532)
 script_dir           = fileparts(mfilename('fullpath'));
 params.run_timestamp = datestr(now, 'yyyymmdd_HHMMSS');
 params.log_dir       = fullfile(script_dir, 'logs', params.run_timestamp);
@@ -121,21 +127,54 @@ fprintf('  [1]  Level 1 -- Random Sampling\n');
 fprintf('  [2]  Level 2 -- Circularity-Guided (rule-based)\n');
 fprintf('  [3]  Level 3 -- ML-Guided (UNet: %s)\n', params.unet_model);
 fprintf('  [4]  Run ALL three and compare\n');
-fprintf('  [5]  Nucleus Normality Test (405nm DAPI, mode: %s)\n\n', params.normality_mode);
+fprintf('  [5]  Nucleus Normality Test (405nm DAPI, mode: %s)\n', params.normality_mode);
+fprintf('  [6]  Segmentation Validation vs Ground Truth (ROC)\n\n');
 
-level_choice = input('Enter choice (1/2/3/4/5): ');
+level_choice = input('Enter choice (1/2/3/4/5/6): ');
 
-%% ── Load .nd2 File ───────────────────────────────────────────────────────
-fprintf('\n[INFO] Loading .nd2 file...\n');
-fprintf('       %s\n\n', params.nd2_path);
-img_data = load_nd2(params.nd2_path, params);
+%% ── Load .nd2 File (cached) ──────────────────────────────────────────────
+% Check if already loaded in base workspace to avoid reloading every run
+if evalin('base', 'exist(''img_data_cached'',''var'')') && ...
+   evalin('base', 'exist(''img_data_cached_path'',''var'')') && ...
+   strcmp(evalin('base', 'img_data_cached_path'), params.nd2_path)
+    fprintf('[INFO] Using cached .nd2 data (skipping reload).\n');
+    fprintf('       %s\n\n', params.nd2_path);
+    img_data = evalin('base', 'img_data_cached');
+else
+    fprintf('\n[INFO] Loading .nd2 file...\n');
+    fprintf('       %s\n\n', params.nd2_path);
+    img_data = load_nd2(params.nd2_path, params);
+    assignin('base', 'img_data_cached',      img_data);
+    assignin('base', 'img_data_cached_path', params.nd2_path);
+    fprintf('[INFO] .nd2 cached for future runs.\n\n');
 
-% Save raw nucleus image to log
-nucleus_fig = figure('Visible', 'off');
-imagesc(img_data.nucleus); colormap gray; axis image off;
-title(sprintf('Nucleus channel (405nm) -- %s', params.run_timestamp), 'Interpreter', 'none');
-exportgraphics(nucleus_fig, fullfile(params.log_dir, 'nucleus_raw.png'), 'Resolution', 150);
-close(nucleus_fig);
+    % Save raw nucleus image to log (only on first load)
+    nucleus_fig = figure('Visible', 'off');
+    imagesc(img_data.nucleus); colormap gray; axis image off;
+    title(sprintf('Nucleus channel (405nm) -- %s', params.run_timestamp), 'Interpreter', 'none');
+    exportgraphics(nucleus_fig, fullfile(params.log_dir, 'nucleus_raw.png'), 'Resolution', 150);
+    close(nucleus_fig);
+end
+
+%% ── Load GT .nd2 File for option 6 (cached separately) ──────────────────
+if level_choice == 6
+    if evalin('base', 'exist(''gt_img_data_cached'',''var'')') && ...
+       evalin('base', 'exist(''gt_img_data_cached_path'',''var'')') && ...
+       strcmp(evalin('base', 'gt_img_data_cached_path'), params.gt_nd2_path)
+        fprintf('[INFO] Using cached GT .nd2 data (skipping reload).\n\n');
+    else
+        fprintf('[INFO] Loading GT .nd2 file...\n');
+        fprintf('       %s\n\n', params.gt_nd2_path);
+        gt_params                  = params;
+        gt_params.nucleus_channel  = params.gt_nucleus_channel;
+        gt_params.series           = params.gt_series;
+        gt_params.z_plane          = params.gt_z_plane;
+        gt_img_data = load_nd2(params.gt_nd2_path, gt_params);
+        assignin('base', 'gt_img_data_cached',      gt_img_data);
+        assignin('base', 'gt_img_data_cached_path', params.gt_nd2_path);
+        fprintf('[INFO] GT .nd2 cached for future runs.\n\n');
+    end
+end
 
 %% ── Run Selected Level(s) ────────────────────────────────────────────────
 results_L1 = []; results_L2 = []; results_L3 = [];
@@ -167,6 +206,20 @@ switch level_choice
         norm_results = run_nucleus_normality_test(img_data, params);
         save_normality_results(norm_results, params);
         fprintf('\n[DONE] Normality test complete.\n');
+        fprintf('[LOG]  Outputs saved to: %s\n', params.log_dir);
+        diary off;
+        return;
+
+    case 6
+        % Segmentation validation vs ground truth
+        gt_img_data = evalin('base', 'gt_img_data_cached');
+        bench_results = run_segmentation_validation( ...
+            gt_img_data, params.gt_mask_path, params.gt_csv_path, params);
+        % Save
+        mat_path = fullfile(params.log_dir, 'results_segmentation_validation.mat');
+        save(mat_path, 'bench_results');
+        fprintf('[LOG]  Saved: results_segmentation_validation.mat\n');
+        fprintf('\n[DONE] Segmentation validation complete.\n');
         fprintf('[LOG]  Outputs saved to: %s\n', params.log_dir);
         diary off;
         return;
@@ -232,12 +285,12 @@ fprintf('[LOG]  Saved: results_normality.mat\n');
 
 csv_path = fullfile(params.log_dir, 'normality_classification.csv');
 fid = fopen(csv_path, 'w');
-fprintf(fid, 'CellID,Class,ClassName,Confidence,Circularity,Area_px2,Reason\n');
+fprintf(fid, 'CellID,Class,ClassName,Confidence,Circularity,Solidity,Area_px2,Reason\n');
 for k = 1:R.n_detected
     c = R.cells(k);
-    fprintf(fid, '%d,%d,%s,%.4f,%.4f,%.0f,"%s"\n', ...
+    fprintf(fid, '%d,%d,%s,%.4f,%.4f,%.4f,%.0f,"%s"\n', ...
             c.id, c.norm_class, c.norm_class_name, c.norm_confidence, ...
-            c.circularity, c.area, c.norm_reason);
+            c.circularity, c.solidity, c.area, c.norm_reason);
 end
 fclose(fid);
 fprintf('[LOG]  Saved: normality_classification.csv\n');

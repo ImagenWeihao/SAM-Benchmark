@@ -397,21 +397,17 @@ fig = figure('Name', 'Nucleus Normality Classification', 'NumberTitle', 'off', .
 sgtitle(sprintf('Nucleus Normality Test — 405nm DAPI Channel  |  Mode: %s', R.mode), ...
         'FontSize', 15, 'FontWeight', 'bold');
 
-%% Panel 1 -- Raw DAPI image with all nuclei overlaid
+%% Panel 1 -- Raw DAPI image with cell IDs only
 ax1 = subplot(2, 4, 1);
 imagesc(ax1, nucleus_img); colormap(ax1, 'gray'); axis(ax1,'image'); axis(ax1,'off');
 hold(ax1, 'on');
 for k = 1:R.n_detected
-    c     = R.cells(k).centroid;
-    cls   = R.class_ids(k);
-    col   = class_colors(cls,:);
-    plot(ax1, c(1), c(2), 'o', 'Color', col, 'MarkerFaceColor', col, ...
-         'MarkerSize', 10, 'LineWidth', 1.5);
-    text(ax1, c(1)+6, c(2), num2str(R.cells(k).id), 'Color', 'white', 'FontSize', 7);
+    c = R.cells(k).centroid;
+    text(ax1, c(1), c(2), num2str(R.cells(k).id), ...
+         'Color', 'yellow', 'FontSize', 8, 'FontWeight', 'bold', ...
+         'HorizontalAlignment', 'center');
 end
-% Fix 1: full legend labels
-title(ax1, {sprintf('DAPI — All nuclei (n=%d)', R.n_detected), ...
-            'green=normal  orange=abnormal shape  red=abnormal count'}, 'FontSize', 8);
+title(ax1, sprintf('DAPI — All nuclei (n=%d)', R.n_detected), 'FontSize', 9);
 
 %% Panel 2 -- Segmentation mask coloured by class
 ax2 = subplot(2, 4, 2);

@@ -21,11 +21,26 @@ function [cells, seg_mask, bw_nuclei] = segment_nuclei(nucleus_img, params)
 
 fprintf('[SEG]  Segmenting nuclei...\n');
 
+%% ── Scale parameters by pixel size ──────────────────────────────────────
+% Default assumes 0.33 µm/px; scale area thresholds for different pixel sizes
+px_size = 0.33;
+if isfield(params, 'metadata') && isfield(params.metadata, 'px_size_x')
+    px_size = params.metadata.px_size_x;
+elseif isfield(params, 'px_size_x')
+    px_size = params.px_size_x;
+end
+scale       = (0.33 / px_size)^2;
+min_area_px = round(200   * scale);
+max_area_px = round(80000 * scale);
+
 %% ── Pre-processing ───────────────────────────────────────────────────────
-% Mild Gaussian smoothing to reduce shot noise
 img_smooth = imgaussfilt(nucleus_img, 1.5);
 
-% Adaptive thresholding (handles uneven illumination across well)
+% Sensitivity=0.5 is the validated default for standard DAPI images.
+% Note: raising sensitivity (e.g. to 0.60) to catch diffuse nuclei causes
+% severe over-segmentation on images with uneven background illumination —
+% tested on WellA05 FOV1 (0.1625 µm/px), resulted in 1193 detections vs
+% 50 GT nuclei. A background subtraction step would be needed first.
 sensitivity = 0.5;
 bw_adapt    = imbinarize(img_smooth, 'adaptive', ...
                          'Sensitivity', sensitivity, ...
@@ -39,14 +54,15 @@ bw_clean = imclose(bw_clean, se_close);
 bw_clean = imfill(bw_clean, 'holes');
 
 % Remove very small objects (debris) and very large (clusters / artefacts)
-min_area_px = 200;    % ~15 µm diameter at 0.3 µm/px
-max_area_px = 80000;  % filter out large aggregates
-bw_clean    = bwareaopen(bw_clean, min_area_px);
-bw_clean    = bw_clean & ~bwareaopen(bw_clean, max_area_px);
+bw_clean = bwareaopen(bw_clean, min_area_px);
+bw_clean = bw_clean & ~bwareaopen(bw_clean, max_area_px);
 
-% Separate touching nuclei with watershed
+% imhmin depth=2.0 is the validated default.
+% Note: lowering to 0.5 to split touching nuclei more aggressively also
+% increases false splits on elongated/blebbing nuclei and compounds the
+% over-segmentation problem. Requires tuning per dataset.
 dist_map  = -bwdist(~bw_clean);
-dist_map  = imhmin(dist_map, 2);   % suppress shallow minima
+dist_map  = imhmin(dist_map, 2);
 ws_labels = watershed(dist_map);
 bw_nuclei = bw_clean & (ws_labels ~= 0);
 
