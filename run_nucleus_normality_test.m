@@ -83,23 +83,23 @@ fprintf('[NNT] Step 3/4 — Classifying nuclei (mode: %s)...\n', params.normalit
 
 switch lower(params.normality_mode)
     case {'stardist', 'cellpose', 'nuclear_seg'}
-        % Route through classify_cells_unet using the same model
         unet_params = params;
-        unet_params.unet_model = params.normality_mode;
+        unet_params.unet_model  = params.normality_mode;
         unet_params.unet_target = 'normal_nucleus';
         [classified, ~] = classify_cells_unet(all_cells, img_data, unet_params);
-        class_ids   = ones(n_detected, 1, 'int32');
-        confidences = zeros(n_detected, 1);
+        class_ids     = ones(n_detected, 1, 'int32');
+        confidences   = zeros(n_detected, 1);
         class_reasons = cell(n_detected, 1);
         for k = 1:n_detected
             switch classified(k).unet_class
                 case 'abnormal_shape'; class_ids(k) = int32(2);
                 case 'abnormal_count'; class_ids(k) = int32(3);
-                otherwise;              class_ids(k) = int32(1);
+                otherwise;             class_ids(k) = int32(1);
             end
             confidences(k)   = classified(k).unet_score;
             class_reasons{k} = sprintf('%s: score=%.3f', params.normality_mode, classified(k).unet_score);
         end
+
     case 'mock'
         [class_ids, confidences, class_reasons] = ...
             classify_mock(all_cells, crops, params);
@@ -109,7 +109,7 @@ switch lower(params.normality_mode)
             classify_unet(all_cells, crops, params);
 
     otherwise
-        error('Unknown normality_mode: "%s". Use ''mock'' or ''unet''.', ...
+        error('Unknown normality_mode: "%s". Use ''mock'', ''unet'', ''stardist'', ''cellpose'', or ''nuclear_seg''.', ...
               params.normality_mode);
 end
 
@@ -370,14 +370,13 @@ if any(bw_micro(:))
         p = new_cell.perimeter;
         a = new_cell.area;
         new_cell.circularity = (p > 0) * min(1, (4*pi*a) / (p^2 + eps));
-
         cells(end+1) = new_cell; %#ok<AGROW>
     end
 
     % Update seg_mask
     offset            = max(seg_mask(:));
     micro_label(micro_label > 0) = micro_label(micro_label > 0) + double(offset);
-    seg_mask          = seg_mask + uint16(micro_label + double(offset));
+    seg_mask          = seg_mask + uint16(micro_label);
 
     fprintf('[SEG]  Micronuclei pass: found %d additional small objects\n', n_micro);
 end
@@ -410,71 +409,86 @@ for k = 1:R.n_detected
          'MarkerSize', 10, 'LineWidth', 1.5);
     text(ax1, c(1)+6, c(2), num2str(R.cells(k).id), 'Color', 'white', 'FontSize', 7);
 end
-title(ax1, sprintf('DAPI — All nuclei (n=%d)\n●green=normal  ●orange=shape  ●red=count', ...
-      R.n_detected), 'FontSize', 9);
+% Fix 1: full legend labels
+title(ax1, {sprintf('DAPI — All nuclei (n=%d)', R.n_detected), ...
+            'green=normal  orange=abnormal shape  red=abnormal count'}, 'FontSize', 8);
 
 %% Panel 2 -- Segmentation mask coloured by class
 ax2 = subplot(2, 4, 2);
 overlay = zeros(size(nucleus_img,1), size(nucleus_img,2), 3);
 for k = 1:R.n_detected
-    mask_k = (R.seg_mask == R.cells(k).id);
+    % Fix 2: match seg_mask label to cell index (1-based ID)
+    mask_k = (R.seg_mask == k);
     col    = class_colors(R.class_ids(k),:);
     for ch = 1:3
         overlay(:,:,ch) = overlay(:,:,ch) + mask_k * col(ch);
     end
 end
-% Add dim background
-bg = repmat(nucleus_img, [1 1 3]) * 0.3;
-imagesc(ax2, bg + overlay); axis(ax2,'image'); axis(ax2,'off');
-title(ax2, {'Segmentation', 'Coloured by class'}, 'FontSize', 10);
+% Dim background + coloured overlay
+bg = repmat(nucleus_img, [1 1 3]) * 0.25;
+imagesc(ax2, min(1, bg + overlay)); axis(ax2,'image'); axis(ax2,'off');
+% Fix 2: add clear legend
+legend_entries = {'Normal', 'Abn. Shape', 'Abn. Count'};
+for cls = 1:3
+    patch(ax2, NaN, NaN, class_colors(cls,:), 'DisplayName', legend_entries{cls});
+end
+legend(ax2, 'show', 'Location', 'southeast', 'FontSize', 7);
+title(ax2, {'Segmentation', 'coloured by class'}, 'FontSize', 10);
 
 %% Panel 3 -- Pie chart of classification breakdown
 ax3 = subplot(2, 4, 3);
-counts = [R.n_normal, R.n_abn_shape, R.n_abn_count];
-lbls   = {sprintf('Normal\n(n=%d)', R.n_normal), ...
-          sprintf('Abn. shape\n(n=%d)', R.n_abn_shape), ...
-          sprintf('Abn. count\n(n=%d)', R.n_abn_count)};
+counts   = [R.n_normal, R.n_abn_shape, R.n_abn_count];
+lbls     = {sprintf('Normal (n=%d)',       R.n_normal), ...
+            sprintf('Abn. Shape (n=%d)',   R.n_abn_shape), ...
+            sprintf('Abn. Count (n=%d)',   R.n_abn_count)};
 non_zero = counts > 0;
 if sum(non_zero) > 0
     pie(ax3, counts(non_zero), lbls(non_zero));
     colormap(ax3, class_colors(non_zero,:));
 end
-title(ax3, sprintf('Classification\n(%.0f%% normal)', R.pct_normal), 'FontSize', 10);
+% Fix 3: clean two-line title, no overlap
+title(ax3, {'Classification breakdown', sprintf('%.0f%% normal', R.pct_normal)}, 'FontSize', 10);
 
 %% Panel 4 -- Circularity vs Solidity scatter, coloured by class
 ax4 = subplot(2, 4, 4);
 hold(ax4, 'on');
 class_labels_leg = {'Normal (A)', 'Abn. Shape (B/F)', 'Abn. Count (C/D/E)'};
-leg_h = gobjects(3,1);
+leg_h    = gobjects(3,1);
+all_circ = [R.cells.circularity];
+all_solid= ones(1, R.n_detected);   % default if solidity missing
+if isfield(R.cells, 'solidity')
+    all_solid = [R.cells.solidity];
+end
+
 for cls = 1:3
     idx = find(R.class_ids == cls);
     if ~isempty(idx)
-        circ_v  = [R.cells(idx).circularity];
-        if isfield(R.cells, 'solidity')
-            solid_v = [R.cells(idx).solidity];
-        else
-            solid_v = ones(1, numel(idx));
-        end
+        circ_v  = all_circ(idx);
+        solid_v = all_solid(idx);
         leg_h(cls) = scatter(ax4, circ_v, solid_v, 60, class_colors(cls,:), ...
                              'filled', 'MarkerEdgeColor', 'k', 'LineWidth', 0.5);
-        % Label cell IDs
         for i = 1:numel(idx)
-            text(ax4, circ_v(i)+0.005, solid_v(i), ...
-                 num2str(R.cells(idx(i)).id), 'FontSize', 7, 'Color', [0.3 0.3 0.3]);
+            text(ax4, circ_v(i)+0.003, solid_v(i), ...
+                 num2str(R.cells(idx(i)).id), 'FontSize', 7, 'Color', [0.2 0.2 0.2]);
         end
     else
         leg_h(cls) = scatter(ax4, NaN, NaN, 1, class_colors(cls,:), 'filled');
     end
 end
-% Draw threshold lines
-xline(ax4, params.normality_circ_threshold,  '--k', 'LineWidth', 1, ...
+
+xline(ax4, params.normality_circ_threshold, '--k', 'LineWidth', 1, ...
       'Label', sprintf('circ=%.2f', params.normality_circ_threshold));
-yline(ax4, params.normality_solid_threshold, ':k',  'LineWidth', 1, ...
+yline(ax4, params.normality_solid_threshold, ':k', 'LineWidth', 1, ...
       'Label', sprintf('solid=%.2f', params.normality_solid_threshold));
 xlabel(ax4, 'Circularity'); ylabel(ax4, 'Solidity');
-legend(ax4, leg_h, class_labels_leg, 'Location', 'southwest', 'FontSize', 8);
+legend(ax4, leg_h, class_labels_leg, 'Location', 'best', 'FontSize', 8);
 title(ax4, {'Feature Space', '(circularity vs solidity)'}, 'FontSize', 10);
-xlim(ax4, [0.6 1.05]); ylim(ax4, [0.3 1.05]);
+
+% Fix 4: auto-zoom to data range with small padding
+circ_pad  = 0.05;
+solid_pad = 0.05;
+xlim(ax4, [max(0.5, min(all_circ)-circ_pad),  min(1.02, max(all_circ)+circ_pad)]);
+ylim(ax4, [max(0.3, min(all_solid)-solid_pad), min(1.05, max(all_solid)+solid_pad)]);
 grid(ax4, 'on');
 
 %% Panels 5-8 -- Crop gallery: show up to 8 cells, coloured border by class
@@ -485,7 +499,6 @@ show_idx = sort_ord(1:n_show);
 
 for g = 1:n_show
     ax = subplot(2, 4, 4+g);
-    
     k   = show_idx(g);
     cls = R.class_ids(k);
     col = class_colors(cls,:);
@@ -498,8 +511,15 @@ for g = 1:n_show
     axis(ax, 'on'); ax.XTick = []; ax.YTick = [];
 
     conf = R.confidences(k);
-    title(ax, sprintf('Cell %d: %s\nconf=%.2f  circ=%.2f', ...
-          R.cells(k).id, R.cells(k).norm_class_name, conf, R.cells(k).circularity), ...
+    % Use short class labels to avoid truncation
+    switch R.cells(k).norm_class_name
+        case 'normal';          cls_label = 'Normal';
+        case 'abnormal_shape';  cls_label = 'Abn. Shape';
+        case 'abnormal_count';  cls_label = 'Abn. Count';
+        otherwise;              cls_label = R.cells(k).norm_class_name;
+    end
+    title(ax, {sprintf('Cell %d: %s', R.cells(k).id, cls_label), ...
+               sprintf('conf=%.2f  circ=%.2f', conf, R.cells(k).circularity)}, ...
           'FontSize', 8, 'Color', col*0.7);
 end
 
