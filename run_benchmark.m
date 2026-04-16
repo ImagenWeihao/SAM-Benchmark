@@ -13,7 +13,7 @@
 % Author: SAM Project
 % Date:   2026
 
-clear variables; clc; close all;
+clear; clc; close all;
 
 %% ── Bio-Formats Path Setup ───────────────────────────────────────────────
 bf_path = 'D:\Matlab Files\toolbox\bfmatlab';
@@ -102,9 +102,20 @@ params.normality_model_path      = '';
 params.gt_mask_path = 'D:\Matlab Files\Codes\SAM_Data\AnnotationData\Mask\20260413_105534_226__WellA05_Channel488,405,561,532_1_Seq0000_masks_FOV1.tif';
 params.gt_csv_path  = 'D:\Matlab Files\Codes\SAM_Data\AnnotationData\Meta_data\20260413_105534_226__WellA05_Channel488,405,561,532_1_Seq0000_annotations_FOV1.csv';
 params.gt_nd2_path  = 'D:\Matlab Files\Codes\SAM_Data\AnnotationData\20260413_105534_226__WellA05_Channel488,405,561,532_1_Seq0000_crop(first5FOV).nd2';
-params.gt_series    = 5;   % Series 5 = FOV1 confirmed by GT centroid overlay
-params.gt_z_plane   = 1;   % 1 Z plane per series in this file
-params.gt_nucleus_channel = 2;   % 405nm = plane 2 (channel order: 488,405,561,532)
+params.gt_series          = 1;     % FOV1 starts at Series 1
+params.gt_series_end      = 15;    % FOV1 spans Series 1-15 (15 Z planes)
+params.gt_z_plane         = 1;     % not used when gt_use_mip=true
+params.gt_nucleus_channel = 2;     % 405nm = plane 2 (channel order: 488,405,561,532)
+params.gt_use_mip         = true;  % GT mask was generated from MIP across all Z planes
+
+% ── 10X -> 40X Validation params (Option 7) ───────────────────────────────
+params.nd2_10x_path          = 'D:\Matlab Files\Codes\SAM_Data\AnnotationData\20260412_195011_768__WellA05_Channel405,561,532_1,BF_Seq0000.nd2';
+params.nd2_40x_path          = params.gt_nd2_path;
+params.channel_10x           = 1;   % 405nm is 1st channel in 10X file
+params.channel_40x           = 2;   % 405nm is 2nd channel in 40X file
+params.n_fov_10x             = 9;
+params.n_fov_40x             = 5;
+params.z_planes_per_40x_fov  = 15;
 script_dir           = fileparts(mfilename('fullpath'));
 params.run_timestamp = datestr(now, 'yyyymmdd_HHMMSS');
 params.log_dir       = fullfile(script_dir, 'logs', params.run_timestamp);
@@ -128,11 +139,14 @@ fprintf('  [2]  Level 2 -- Circularity-Guided (rule-based)\n');
 fprintf('  [3]  Level 3 -- ML-Guided (UNet: %s)\n', params.unet_model);
 fprintf('  [4]  Run ALL three and compare\n');
 fprintf('  [5]  Nucleus Normality Test (405nm DAPI, mode: %s)\n', params.normality_mode);
-fprintf('  [6]  Segmentation Validation vs Ground Truth (ROC)\n\n');
+fprintf('  [6]  Segmentation Validation vs Ground Truth (ROC)\n');
+fprintf('  [7]  10X -> 40X GT Validation (stitched, overlap crop)\n\n');
 
-level_choice = input('Enter choice (1/2/3/4/5/6): ');
+level_choice = input('Enter choice (1/2/3/4/5/6/7): ');
 
 %% ── Load .nd2 File (cached) ──────────────────────────────────────────────
+% Option 7 handles its own loading (10X + 40X stitching)
+if level_choice ~= 7
 % Check if already loaded in base workspace to avoid reloading every run
 if evalin('base', 'exist(''img_data_cached'',''var'')') && ...
    evalin('base', 'exist(''img_data_cached_path'',''var'')') && ...
@@ -155,6 +169,7 @@ else
     exportgraphics(nucleus_fig, fullfile(params.log_dir, 'nucleus_raw.png'), 'Resolution', 150);
     close(nucleus_fig);
 end
+end
 
 %% ── Load GT .nd2 File for option 6 (cached separately) ──────────────────
 if level_choice == 6
@@ -168,7 +183,9 @@ if level_choice == 6
         gt_params                  = params;
         gt_params.nucleus_channel  = params.gt_nucleus_channel;
         gt_params.series           = params.gt_series;
+        gt_params.series_end       = params.gt_series_end;
         gt_params.z_plane          = params.gt_z_plane;
+        gt_params.use_mip          = params.gt_use_mip;
         gt_img_data = load_nd2(params.gt_nd2_path, gt_params);
         assignin('base', 'gt_img_data_cached',      gt_img_data);
         assignin('base', 'gt_img_data_cached_path', params.gt_nd2_path);
@@ -220,6 +237,17 @@ switch level_choice
         save(mat_path, 'bench_results');
         fprintf('[LOG]  Saved: results_segmentation_validation.mat\n');
         fprintf('\n[DONE] Segmentation validation complete.\n');
+        fprintf('[LOG]  Outputs saved to: %s\n', params.log_dir);
+        diary off;
+        return;
+
+    case 7
+        % 10X -> 40X GT validation using stage coordinates
+        val_results = run_segmentation_validation_10x(params);
+        mat_path = fullfile(params.log_dir, 'results_validation_10x.mat');
+        save(mat_path, 'val_results', '-v7.3');
+        fprintf('[LOG]  Saved: results_validation_10x.mat\n');
+        fprintf('\n[DONE] 10X -> 40X validation complete.\n');
         fprintf('[LOG]  Outputs saved to: %s\n', params.log_dir);
         diary off;
         return;

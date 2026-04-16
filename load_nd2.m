@@ -79,28 +79,54 @@ fprintf('[ND2]  Dimensions: W=%d  H=%d  C=%d  Z=%d  T=%d\n', ...
         img_width, img_height, n_channels, n_z, n_t);
 fprintf('[ND2]  Pixel size: %.4f x %.4f um\n', px_size_x, px_size_y);
 
-%% ── Extract per-channel images at correct Z plane ────────────────────────
+%% ── Extract per-channel images (single Z or MIP) ─────────────────────────
 image_stack = data{s_idx, 1};
 channels    = cell(1, n_channels);
 
-if isfield(params, 'z_plane') && params.z_plane > 1
+% MIP mode: compute Maximum Intensity Projection across multiple series
+% Each series = one Z plane for this FOV (Nikon nd2 structure)
+% Set params.use_mip = true and params.series_end to enable
+use_mip    = isfield(params, 'use_mip') && params.use_mip;
+series_end = s_idx;  % default: single series
+if use_mip && isfield(params, 'series_end') && params.series_end > s_idx
+    series_end = min(params.series_end, size(data, 1));
+    fprintf('[ND2]  Computing MIP across series %d-%d (%d Z planes)...\n', ...
+            s_idx, series_end, series_end - s_idx + 1);
+elseif use_mip
+    use_mip = false;   % only 1 series available, disable MIP
+    fprintf('[ND2]  MIP requested but only 1 series — loading single plane.\n');
+end
+
+if ~use_mip && isfield(params, 'z_plane') && params.z_plane > 1
     z_idx = min(params.z_plane, n_z);
+    fprintf('[ND2]  Extracting Z plane %d of %d\n', z_idx, n_z);
 else
     z_idx = 1;
 end
 
-if n_z > 1
-    fprintf('[ND2]  Extracting Z plane %d of %d\n', z_idx, n_z);
-end
-
 for c = 1:n_channels
-    plane_idx = (z_idx - 1) * n_channels + c;
-    if plane_idx <= size(image_stack, 1)
-        raw_plane = image_stack{plane_idx, 1};
+    if use_mip
+        % Max-project channel c across all series in range
+        mip_plane = zeros(img_height, img_width);
+        for s = s_idx:series_end
+            plane_idx = c;   % each series has 1 Z, so plane = channel index
+            if plane_idx <= size(data{s,1}, 1)
+                raw_z = double(data{s, 1}{plane_idx, 1});
+                mip_plane = max(mip_plane, raw_z);
+            end
+        end
+        raw_plane = mip_plane;
+        z_idx     = 0;   % 0 = MIP
     else
-        warning('Plane %d not found (Z=%d, C=%d); using zeros.', plane_idx, z_idx, c);
-        raw_plane = zeros(img_height, img_width);
+        plane_idx = (z_idx - 1) * n_channels + c;
+        if plane_idx <= size(image_stack, 1)
+            raw_plane = image_stack{plane_idx, 1};
+        else
+            warning('Plane %d not found (Z=%d, C=%d); using zeros.', plane_idx, z_idx, c);
+            raw_plane = zeros(img_height, img_width);
+        end
     end
+
     raw_double = double(raw_plane);
     cmax = max(raw_double(:));
     if cmax > 0
@@ -116,7 +142,7 @@ img_data.channels   = channels;
 img_data.n_channels = n_channels;
 img_data.n_z        = n_z;
 img_data.n_t        = n_t;
-img_data.z_loaded   = z_idx;
+img_data.z_loaded   = z_idx;   % 0 = MIP, >0 = specific Z plane
 img_data.raw        = data;
 img_data.metadata   = struct( ...
     'px_size_x',  px_size_x, ...
@@ -128,5 +154,10 @@ img_data.metadata   = struct( ...
     'n_t',        n_t, ...
     'z_loaded',   z_idx);
 
-fprintf('[ND2]  File loaded successfully (Z=%d).\n\n', z_idx);
+if use_mip
+    fprintf('[ND2]  File loaded successfully (MIP across series %d-%d, %d Z planes).\n\n', ...
+            s_idx, series_end, series_end - s_idx + 1);
+else
+    fprintf('[ND2]  File loaded successfully (Z=%d).\n\n', z_idx);
+end
 end

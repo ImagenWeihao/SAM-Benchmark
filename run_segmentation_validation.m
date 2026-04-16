@@ -7,7 +7,9 @@ function results = run_segmentation_validation(img_data, mask_path, csv_path, pa
 
 fprintf('\n==============================================\n');
 fprintf('  SEGMENTATION BENCHMARK vs GROUND TRUTH\n');
-fprintf('  FOV1  |  405nm DAPI channel  |  Series=%d\n', params.gt_series);
+mip_str = '';
+if isfield(params, 'gt_use_mip') && params.gt_use_mip; mip_str = ' | MIP'; end
+fprintf('  FOV1  |  405nm DAPI channel  |  Series=%d%s\n', params.gt_series, mip_str);
 fprintf('==============================================\n\n');
 
 %% ── Step 1: Load ground truth mask and annotations ───────────────────────
@@ -148,34 +150,34 @@ end
 
 %% ======================================================================
 function roc = compute_roc(gt_mask, pred_mask, annot)
-%COMPUTE_ROC  Compute ROC curve using per-nucleus IoU matching.
+%COMPUTE_ROC  Compute ROC curve by varying confidence score threshold.
 %
-%  For each IoU threshold t in [0,1]:
-%    TP = GT nuclei matched by a prediction with IoU >= t
-%    FN = GT nuclei not matched
-%    FP = predicted regions not matching any GT nucleus
-%    TN = background pixels correctly not predicted
-%  TPR = TP / (TP + FN)
-%  FPR = FP / (FP + TN)
+%  Confidence score = mean intensity of each predicted nucleus region.
+%  At each score threshold:
+%    - Keep only predictions with score >= threshold
+%    - Match kept predictions to GT nuclei at fixed IoU=0.5
+%    - Compute TPR = TP/n_GT and FPR = FP/(FP+n_GT)
+%  This sweeps the full [0,1] range like a standard detector ROC.
 
-thresholds = 0:0.02:1.0;
-n_thresh   = numel(thresholds);
-tpr        = zeros(1, n_thresh);
-fpr        = zeros(1, n_thresh);
-precision  = zeros(1, n_thresh);
+iou_fixed = 0.5;   % fixed IoU threshold for matching
 
 gt_ids   = unique(gt_mask(gt_mask > 0));
 pred_ids = unique(pred_mask(pred_mask > 0));
 n_gt     = numel(gt_ids);
 n_pred   = numel(pred_ids);
 
-% Pre-compute IoU matrix [n_gt x n_pred]
 fprintf('    Computing IoU matrix (%d GT x %d pred)...\n', n_gt, n_pred);
+
+% Compute IoU matrix at fixed threshold
 iou_matrix = zeros(n_gt, n_pred);
-for gi = 1:n_gt
-    gt_mask_i = (gt_mask == gt_ids(gi));
-    for pi = 1:n_pred
-        pred_mask_p = (pred_mask == pred_ids(pi));
+pred_scores = zeros(1, n_pred);
+
+for pi = 1:n_pred
+    pred_mask_p = (pred_mask == pred_ids(pi));
+    % Score = mean intensity proxy (use mask area as fallback)
+    pred_scores(pi) = sum(pred_mask_p(:));
+    for gi = 1:n_gt
+        gt_mask_i    = (gt_mask == gt_ids(gi));
         intersection = sum(gt_mask_i(:) & pred_mask_p(:));
         if intersection > 0
             union = sum(gt_mask_i(:) | pred_mask_p(:));
@@ -184,62 +186,80 @@ for gi = 1:n_gt
     end
 end
 
-% Total background pixels for FPR calculation
-total_bg = sum(gt_mask(:) == 0);
+% Normalise scores to [0,1]
+if max(pred_scores) > 0
+    pred_scores = pred_scores ./ max(pred_scores);
+end
+
+% Sweep score thresholds from high to low (like a detector ROC)
+% At threshold=1: keep nothing → TPR=0, FPR=0
+% At threshold=0: keep everything → TPR=max, FPR=max
+score_thresholds = [1.0, sort(unique(pred_scores), 'descend'), -eps];
+n_thresh = numel(score_thresholds);
+tpr      = zeros(1, n_thresh);
+fpr      = zeros(1, n_thresh);
+precision= zeros(1, n_thresh);
 
 for ti = 1:n_thresh
-    t  = thresholds(ti);
-    matched_gt   = false(n_gt, 1);
-    matched_pred = false(n_pred, 1);
+    st = score_thresholds(ti);
+    keep = pred_scores >= st;   % predictions above score threshold
+    keep_idx = find(keep);
+    n_keep   = numel(keep_idx);
 
-    % Greedy matching: highest IoU first
-    [sorted_iou, sort_idx] = sort(iou_matrix(:), 'descend');
-    for si = 1:numel(sorted_iou)
-        if sorted_iou(si) < t; break; end
-        [gi, pi] = ind2sub([n_gt, n_pred], sort_idx(si));
-        if ~matched_gt(gi) && ~matched_pred(pi)
-            matched_gt(gi)   = true;
-            matched_pred(pi) = true;
+    matched_gt   = false(n_gt, 1);
+    matched_pred = false(n_keep, 1);
+
+    if n_keep > 0
+        % Greedy match at IoU=0.5
+        sub_iou = iou_matrix(:, keep_idx);
+        [sorted_iou, sort_idx] = sort(sub_iou(:), 'descend');
+        for si = 1:numel(sorted_iou)
+            if sorted_iou(si) < iou_fixed; break; end
+            [gi, pi] = ind2sub([n_gt, n_keep], sort_idx(si));
+            if ~matched_gt(gi) && ~matched_pred(pi)
+                matched_gt(gi)   = true;
+                matched_pred(pi) = true;
+            end
         end
     end
 
     TP = sum(matched_gt);
-    FN = n_gt - TP;
-    FP = sum(~matched_pred);
+    FP = n_keep - sum(matched_pred);
 
-    % FPR: false positive pixels / total background pixels
-    fp_px = 0;
-    for pi = 1:n_pred
-        if ~matched_pred(pi)
-            fp_px = fp_px + sum(pred_mask(:) == pred_ids(pi));
-        end
-    end
-
-    tpr(ti)       = TP / (n_gt + eps);
-    fpr(ti)       = fp_px / (total_bg + eps);
+    tpr(ti)  = TP / (n_gt + eps);
+    fpr(ti)  = FP / (FP + n_gt + eps);
     if TP + FP > 0
         precision(ti) = TP / (TP + FP);
     end
 end
 
-% AUC via trapezoidal integration
+% AUC via trapezoidal integration (sort by FPR)
 [fpr_s, idx] = sort(fpr);
 tpr_s        = tpr(idx);
 auc          = trapz(fpr_s, tpr_s);
 
-% F1 at IoU=0.5
-t50_idx      = find(thresholds >= 0.5, 1);
-f1_at_half   = 2 * precision(t50_idx) * tpr(t50_idx) / ...
-               (precision(t50_idx) + tpr(t50_idx) + eps);
+% F1 at IoU=0.5, best threshold
+t50_idx    = find(thresholds_f1(tpr, precision), 1);
+if isempty(t50_idx); t50_idx = 1; end
+% Use score threshold closest to 0.5 for F1 reference
+[~, mid]   = min(abs(score_thresholds - 0.5));
+f1_at_half = 2 * precision(mid) * tpr(mid) / (precision(mid) + tpr(mid) + eps);
 
-roc.thresholds = thresholds;
-roc.tpr        = tpr;
-roc.fpr        = fpr;
-roc.precision  = precision;
-roc.auc        = auc;
-roc.f1_at_half = f1_at_half;
-roc.n_gt       = n_gt;
-roc.iou_matrix = iou_matrix;
+roc.thresholds  = score_thresholds;
+roc.tpr         = tpr;
+roc.fpr         = fpr;
+roc.precision   = precision;
+roc.auc         = auc;
+roc.f1_at_half  = f1_at_half;
+roc.n_gt        = n_gt;
+roc.iou_matrix  = iou_matrix;
+roc.pred_scores = pred_scores;
+end
+
+function idx = thresholds_f1(tpr, precision)
+% Helper: find index of best F1
+f1 = 2 * precision .* tpr ./ (precision + tpr + eps);
+[~, idx] = max(f1);
 end
 
 
@@ -347,13 +367,14 @@ for m = 1:3
     tpr_s        = roc{m}.tpr(idx);
     plot(ax5, fpr_s, tpr_s, '-', 'Color', colors{m}, 'LineWidth', 2.5, ...
          'DisplayName', sprintf('%s (AUC=%.3f)', method_short{m}, roc{m}.auc));
-    % Mark F1@0.5 point
-    t50 = find(roc{m}.thresholds >= 0.5, 1);
-    plot(ax5, roc{m}.fpr(t50), roc{m}.tpr(t50), 'o', ...
+    % Mark operating point at mid score threshold
+    [~, mid_idx] = min(abs(roc{m}.thresholds - 0.5));
+    plot(ax5, roc{m}.fpr(mid_idx), roc{m}.tpr(mid_idx), 'o', ...
          'Color', colors{m}, 'MarkerSize', 10, 'MarkerFaceColor', colors{m}, ...
          'HandleVisibility', 'off');
 end
-xlabel(ax5, 'False Positive Rate'); ylabel(ax5, 'True Positive Rate');
+xlabel(ax5, 'False Positive Rate (object-level: FP / (FP + n_{GT}))');
+ylabel(ax5, 'True Positive Rate (Recall)');
 legend(ax5, 'show', 'Location', 'southeast', 'FontSize', 9);
 title(ax5, {'ROC Curves — Nucleus Detection', '(dots = operating point at IoU threshold 0.5)'}, ...
       'FontSize', 10);

@@ -2,7 +2,7 @@
 
 **SAM** (Smart Adaptive Microscopy) is a framework for evaluating how intelligently a microscopy system can allocate its imaging resources. This benchmark tests four levels of decision-making — from naive random sampling up to LLM-guided adaptive control — so their performance can be directly compared.
 
-This repo currently implements **Levels 1, 2, and 3**, a standalone **Nucleus Normality Test**, and a **Segmentation Validation** pipeline with ground truth ROC analysis. Level 4 (LLM-adaptive SAM) is in development.
+This repo currently implements **Levels 1, 2, and 3**, a standalone **Nucleus Normality Test**, a same-zoom **Segmentation Validation** pipeline (Option 6), and a **cross-zoom 10X→40X Segmentation Validation** pipeline (Option 7) with automatic stitching, stage-based alignment, and NCC refinement. Level 4 (LLM-adaptive SAM) is in development.
 
 ---
 
@@ -34,6 +34,7 @@ All levels follow the same 5-step workflow for fair comparison:
 [4]  Run ALL three and compare
 [5]  Nucleus Normality Test (405nm DAPI)
 [6]  Segmentation Validation vs Ground Truth (ROC)
+[7]  10X -> 40X GT Validation (stitched, overlap crop)
 ```
 
 ---
@@ -95,6 +96,47 @@ Per-nucleus IoU matching at thresholds 0 to 1. Primary metric is **F1 at IoU=0.5
 4. GT annotation map — coloured by morphology class
 5. ROC curves — all three methods with AUC and F1@0.5 operating points
 6. Detection rate by morphology class (normal / blebbing / micronuclei / unsure)
+
+---
+
+## Cross-Zoom Segmentation Validation (Option 7)
+
+Segment a 10X overview mosaic and validate against a 40X ground-truth mask — the two images are at different zooms and may come from different acquisition sessions.
+
+### Workflow
+1. **Stitch 10X mosaic** — read `PlanePositionX/Y` from Bio-Formats OME metadata for every 10X series, invert per the Nikon `cameraTransformationMatrix` (stage +X → image LEFT, stage +Y → image UP), and paste tiles onto a shared canvas in µm coordinates.
+2. **Load 40X FOVs + MIPs** — compute a Max Intensity Projection across the 15 Z planes per FOV, read each FOV's stage centre.
+3. **Place 40X GT mask** in the 10X canvas — downsample the native 40X label mask by `px_40x / px_10x ≈ 0.248` using `'nearest'` (preserves integer labels), positioned at the physical stage location.
+4. **Crop overlap region** — the area where both 10X image and 40X GT mask have content.
+5. **Large-template NCC refinement** — stage coordinates drift between sessions (typically 30–50 µm). Run `normxcorr2` with the **entire 10X segmentation mask** as a single template against the padded GT mask, search ±100 µm. The multi-cell cluster provides many simultaneous correspondences which constrain the global shift uniquely; this is more robust than sliding small windows over single cells.
+6. **Apply the corrected shift** (sign-inverted relative to NCC peak location) to the GT mask, then compute IoU-based ROC against the 10X segmentation.
+
+### Key parameters
+```matlab
+params.nd2_10x_path          = 'path\to\10x_overview.nd2';
+params.nd2_40x_path          = 'path\to\40x_highres.nd2';
+params.channel_10x           = 1;    % DAPI channel in 10X file
+params.channel_40x           = 2;    % DAPI channel in 40X file
+params.n_fov_10x             = 9;    % 3x3 10X mosaic
+params.n_fov_40x             = 5;    % five 40X FOVs
+params.z_planes_per_40x_fov  = 15;
+params.align_ncc_search_um   = 100;  % NCC search radius
+```
+
+### Validated results (WellA05, FOV1 overlap, 405nm DAPI)
+
+| Method | Detected | GT in overlap | F1 @ IoU=0.5 | AUC |
+|--------|----------|---------------|--------------|-----|
+| MATLAB (L1/L2) | 28 | 22 | 0.000 | 0.100 |
+| Circularity-filtered (L2) | 27 | 22 | **0.600** | 0.107 |
+| StarDist (L3) | 29 | 22 | **0.773** | 0.143 |
+
+**NCC refinement** found a global shift of (−7, −65) px = (−4.6, −42.6) µm between the stage-predicted position and the true physical location, with peak NCC = 0.511. Before the refinement, all three methods scored 0.0 on F1 — the entire validation depends on this correction step.
+
+### Output figures
+- `overlap_diagnostic_initial_<ts>.png` — 10X crop + GT mask at stage-based position
+- `overlap_diagnostic_refined_<ts>.png` — same after NCC refinement (GT now overlays 10X nuclei)
+- `validation_10x_40x_<ts>.png` — 6-panel result: three segmentation overlays + ROC + detection counts + GT reference
 
 ---
 
@@ -204,7 +246,10 @@ run_level1.m                   ← Level 1: random sampling
 run_level2.m                   ← Level 2: circularity-guided
 run_level3.m                   ← Level 3: ML-guided (UNet)
 run_nucleus_normality_test.m   ← Nucleus normality classification
-run_segmentation_validation.m  ← Ground truth ROC validation
+run_segmentation_validation.m  ← Ground truth ROC validation (Option 6, same-zoom)
+run_segmentation_validation_10x.m ← Cross-zoom 10X→40X validation (Option 7, stitching + NCC refinement)
+find_fov_location.m            ← NCC-based location of a single 40X FOV in the 10X mosaic (diagnostic)
+export_overlap_tif.py          ← Python reference: stage + cameraTransformationMatrix alignment → overlap TIFs
 classify_cells_unet.m          ← UNet model dispatcher
 unet_stardist.m                ← StarDist adapter
 unet_cellpose.m                ← Cellpose adapter
