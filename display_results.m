@@ -3,15 +3,12 @@ function display_results(results_L1, results_L2, results_L3, params)
 %
 %  display_results(results_L1, results_L2, results_L3, params)
 %  Pass [] for levels not run.
-
 show_L1 = ~isempty(results_L1);
 show_L2 = ~isempty(results_L2);
 show_L3 = ~isempty(results_L3);
-
 if show_L1; plot_single_level(results_L1, params); end
 if show_L2; plot_single_level(results_L2, params); end
 if show_L3; plot_level3(results_L3, params);       end
-
 % Comparison: show whenever 2+ levels are run
 active = {results_L1, results_L2, results_L3};
 active = active(~cellfun(@isempty, active));
@@ -19,23 +16,18 @@ if numel(active) >= 2
     compare_levels(active, params);
 end
 end
-
-
 %% ======================================================================
 function plot_single_level(R, params)
 %PLOT_SINGLE_LEVEL  Six-panel figure for Level 1 or Level 2.
-
 fig = figure('Name', R.label, 'NumberTitle', 'off', ...
              'Units', 'normalized', 'Position', [0.05 0.05 0.90 0.85]);
 sgtitle(sprintf('SAM Benchmark -- %s', R.label), ...
         'FontSize', 16, 'FontWeight', 'bold');
-
 %% Panel 1 -- Segmentation mask
 ax1 = subplot(2, 3, 1);
 imagesc(ax1, R.seg_mask); colormap(ax1, 'jet');
 axis(ax1, 'image'); axis(ax1, 'off');
 title(ax1, sprintf('All Detected Nuclei\n(n=%d)', R.n_detected), 'FontSize', 10);
-
 %% Panel 2 -- Scan pool
 ax2 = subplot(2, 3, 2);
 imagesc(ax2, R.seg_mask); colormap(ax2, 'gray');
@@ -45,7 +37,6 @@ for k = 1:numel(R.scan_cells)
     plot(ax2, c(1), c(2), '.', 'Color', [0 1 1], 'MarkerSize', 8);
 end
 title(ax2, sprintf('Scan Pool (n=%d)', R.n_scanned), 'FontSize', 10);
-
 %% Panel 3 -- Selected targets
 ax3 = subplot(2, 3, 3);
 imagesc(ax3, R.seg_mask); colormap(ax3, 'gray');
@@ -62,7 +53,6 @@ for k = 1:numel(R.target_cells)
          'Color', 'yellow', 'FontSize', 7, 'FontWeight', 'bold');
 end
 title(ax3, sprintf('Z-Stack Targets (n=%d)', R.n_targeted), 'FontSize', 10);
-
 %% Panel 4 -- Circularity distribution
 ax4 = subplot(2, 3, 4);
 circ_all = [R.all_cells.circularity];
@@ -79,7 +69,6 @@ xlabel(ax4, 'Circularity'); ylabel(ax4, 'Count');
 legend(ax4, [h1, h2], {'All cells', 'Selected'}, 'Location', 'best');
 title(ax4, 'Circularity Distribution', 'FontSize', 10);
 grid(ax4, 'on');
-
 %% Panel 5 -- Z-stack strip
 ax5 = subplot(2, 3, 5);
 if ~isempty(R.zstack) && ~isempty(R.zstack(1).z_planes)
@@ -94,7 +83,6 @@ else
     axis(ax5, 'off');
     title(ax5, 'Z-Stack Preview', 'FontSize', 10);
 end
-
 %% Panel 6 -- Focus quality
 ax6 = subplot(2, 3, 6);
 if ~isempty(R.zstack) && ~isempty(R.zstack(1).focus_scores)
@@ -117,27 +105,21 @@ if ~isempty(R.zstack) && ~isempty(R.zstack(1).focus_scores)
 else
     axis(ax6, 'off');
 end
-
 drawnow;
 save_figure(fig, sprintf('Level%d_%s.png', R.level, params.run_timestamp), params);
 end
-
-
 %% ======================================================================
 function plot_level3(R, params)
 %PLOT_LEVEL3  Six-panel figure for Level 3 (adds UNet confidence panel).
-
 fig = figure('Name', R.label, 'NumberTitle', 'off', ...
              'Units', 'normalized', 'Position', [0.05 0.05 0.90 0.85]);
 sgtitle(sprintf('SAM Benchmark -- %s', R.label), ...
         'FontSize', 16, 'FontWeight', 'bold');
-
 %% Panel 1 -- Segmentation mask
 ax1 = subplot(2, 3, 1);
 imagesc(ax1, R.seg_mask); colormap(ax1, 'jet');
 axis(ax1, 'image'); axis(ax1, 'off');
 title(ax1, sprintf('Detected Nuclei (n=%d)', R.n_detected), 'FontSize', 10);
-
 %% Panel 2 -- Scan pool coloured by UNet score
 ax2 = subplot(2, 3, 2);
 imagesc(ax2, R.seg_mask); colormap(ax2, 'gray');
@@ -150,8 +132,7 @@ for k = 1:numel(R.scan_cells)
     color = cmap(ci, :);
     plot(ax2, c(1), c(2), 'o', 'Color', color, 'MarkerFaceColor', color, 'MarkerSize', 8);
 end
-title(ax2, sprintf('Scan Pool — coloured by UNet score\n(blue=low, yellow=high)'), 'FontSize', 10);
-
+title(ax2, sprintf('Scan Pool -- coloured by UNet score\n(blue=low, yellow=high)'), 'FontSize', 10);
 %% Panel 3 -- Selected targets
 ax3 = subplot(2, 3, 3);
 imagesc(ax3, R.seg_mask); colormap(ax3, 'gray');
@@ -169,7 +150,6 @@ for k = 1:numel(R.target_cells)
 end
 xline_str = sprintf('threshold=%.2f', params.unet_threshold);
 title(ax3, sprintf('Z-Stack Targets (n=%d)\nlabel=UNet score', R.n_targeted), 'FontSize', 10);
-
 %% Panel 4 -- UNet confidence score distribution
 ax4 = subplot(2, 3, 4);
 all_scores = [R.scan_cells.unet_score];
@@ -183,7 +163,6 @@ xlabel(ax4, 'UNet Confidence Score'); ylabel(ax4, 'Count');
 legend(ax4, [h1, h2], {'All scanned', 'Selected'}, 'Location', 'best');
 title(ax4, sprintf('UNet Score Distribution\nModel: %s', params.unet_model), 'FontSize', 10);
 grid(ax4, 'on');
-
 %% Panel 5 -- Z-stack strip (high-res)
 ax5 = subplot(2, 3, 5);
 if ~isempty(R.zstack) && ~isempty(R.zstack(1).z_planes)
@@ -197,7 +176,6 @@ if ~isempty(R.zstack) && ~isempty(R.zstack(1).z_planes)
 else
     axis(ax5, 'off');
 end
-
 %% Panel 6 -- Focus quality
 ax6 = subplot(2, 3, 6);
 if ~isempty(R.zstack) && ~isempty(R.zstack(1).focus_scores)
@@ -220,24 +198,18 @@ if ~isempty(R.zstack) && ~isempty(R.zstack(1).focus_scores)
 else
     axis(ax6, 'off');
 end
-
 drawnow;
 save_figure(fig, sprintf('Level3_%s.png', params.run_timestamp), params);
 end
-
-
 %% ======================================================================
 function compare_levels(active_results, params)
 %COMPARE_LEVELS  Side-by-side comparison for any combination of levels run.
-
 n = numel(active_results);
 fig = figure('Name', 'SAM Benchmark -- Level Comparison', 'NumberTitle', 'off', ...
              'Units', 'normalized', 'Position', [0.05 0.05 0.92 0.65]);
 sgtitle('SAM Benchmark -- Level Comparison', 'FontSize', 15, 'FontWeight', 'bold');
-
 colors = {[0.4 0.7 1.0], [1.0 0.4 0.4], [0.2 0.8 0.4]};
 labels = cellfun(@(R) R.label, active_results, 'UniformOutput', false);
-
 %% Row 1 -- Circularity distributions per level
 for i = 1:n
     R  = active_results{i};
@@ -253,10 +225,8 @@ for i = 1:n
     legend(ax, [h1 h2], {'All', 'Selected'}, 'Location', 'best', 'FontSize', 8);
     grid(ax, 'on');
 end
-
 %% Row 2 -- Bar chart of key metrics across all levels
 ax_bar = subplot(2, n, (n+1):(2*n));
-
 metric_labels = {'Circ. (selected)', 'Circ. (all)', 'Solidity', 'Aspect Ratio'};
 vals = zeros(n, 4);
 for i = 1:n
@@ -267,7 +237,6 @@ for i = 1:n
     vals(i,3) = mean([morph_i.solidity]);
     vals(i,4) = mean([morph_i.aspect_ratio]);
 end
-
 b = bar(ax_bar, vals', 'grouped');
 for i = 1:n; b(i).FaceColor = colors{i}; end
 set(ax_bar, 'XTickLabel', metric_labels, 'XTick', 1:4);
@@ -275,7 +244,6 @@ ylabel(ax_bar, 'Mean Value');
 legend(ax_bar, labels, 'Location', 'best', 'FontSize', 9);
 title(ax_bar, 'Morphology Metrics Comparison', 'FontSize', 11);
 grid(ax_bar, 'on');
-
 for i = 1:n
     for m = 1:4
         text(ax_bar, b(i).XEndPoints(m), b(i).YEndPoints(m)+0.01, ...
@@ -283,10 +251,8 @@ for i = 1:n
              'HorizontalAlignment', 'center', 'VerticalAlignment', 'bottom', 'FontSize', 7);
     end
 end
-
 drawnow;
 save_figure(fig, sprintf('Comparison_%s.png', params.run_timestamp), params);
-
 %% Console summary
 fprintf('\n+--------------------------------------------------------------+\n');
 fprintf('| LEVEL COMPARISON SUMMARY                                    |\n');
@@ -313,8 +279,6 @@ for r = 1:numel(rows)
 end
 fprintf('+----------------------+%s\n\n', repmat('------------+', 1, n));
 end
-
-
 %% ======================================================================
 function save_figure(fig, filename, params)
 if isfield(params, 'log_dir') && ~isempty(params.log_dir)
