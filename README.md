@@ -220,11 +220,29 @@ L1 Otsu establishes a clear lower-tier baseline: more FPs and fewer matched GT t
 - `centroids_10x_L1_<ts>.csv`, `centroids_10x_L2_<ts>.csv`, `centroids_10x_L3_<ts>.csv`
 - `results_validation_10x.mat` -- full result struct for downstream analysis
 
+### Example outputs
+
+**6-panel validation figure** (overlay + PR curve + % of GT bars):
+
+![Validation 6-panel](Example%20Figures/validation_10x_40x_20260422_140450.png)
+
+**8-panel accuracy histogram** (detection rate vs IoU threshold + paired accuracy + TP/FP/FN):
+
+![Accuracy histogram](Example%20Figures/accuracy_histogram_10x_20260422_140450.png)
+
+**Centroid CSVs** (one row per predicted cell, unmatched rows have `matched_gt_id = 0`):
+
+- [L1 Otsu centroids](Example%20Figures/centroids_10x_L1_20260422_140450.csv)
+- [L2 Rule-based centroids](Example%20Figures/centroids_10x_L2_20260422_140450.csv)
+- [L3 StarDist centroids](Example%20Figures/centroids_10x_L3_20260422_140450.csv)
+
 ---
 
 ## GUI Front-End (`run_benchmark_gui`)
 
 Three-panel configuration window with Start/Stop controls and a rolling log pane. Wraps all CLI options except interactive-only ones.
+
+![SAM Benchmark Runner GUI](Example%20Figures/BenchmarkRunner_GUI.jpg)
 
 | Panel | Controls |
 |-------|----------|
